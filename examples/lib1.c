@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "lib6502.h"
+#include "u6502.h"
 
 /* Emulated OS functions. */
 
@@ -10,7 +10,7 @@
 /* Write the accumulator to stdout.  This function will be invoked
  * when the emulated program calls 0xFFEE.
  */
-int wrch(M6502 *mpu, uint16_t address, uint8_t data)
+static uint16_t wrch(U6502 *mpu)
 {
   int pc;
 
@@ -18,11 +18,13 @@ int wrch(M6502 *mpu, uint16_t address, uint8_t data)
    */
   putchar(mpu->registers->a);
 
+  uint8_t *memory = (uint8_t *)mpu->userdata;
+
   /* We arrived here from a JSR instruction.  The stack contains the
    * saved PC.  Pop it off the stack.
    */
-  pc  = mpu->memory[++mpu->registers->s + 0x100];
-  pc |= mpu->memory[++mpu->registers->s + 0x100] << 8;
+  pc  = memory[++mpu->registers->s + 0x100];
+  pc |= memory[++mpu->registers->s + 0x100] << 8;
 
   /* The JSR instruction pushes the value of PC before it has been
    * incremented to point to the instruction after the JSR.  Return PC
@@ -38,13 +40,13 @@ int wrch(M6502 *mpu, uint16_t address, uint8_t data)
 /* Exit gracefully.  We arrange for this function to be called when
  * the emulator tries to transfer control to address 0.
  */
-int done(M6502 *mpu, uint16_t address, uint8_t data)
+static uint16_t done(U6502 *mpu)
 {
   char buffer[64];
 
   /* Dump the internal state of the processor.
    */
-  M6502_dump(mpu, buffer);
+  U6502_dump(mpu, buffer);
 
   /* Print a cute message and quit.
    */
@@ -52,19 +54,48 @@ int done(M6502 *mpu, uint16_t address, uint8_t data)
   exit(0);
 }
 
-int main()
-{
-  M6502    *mpu = M6502_new(0, 0, 0);	/* Make a 6502 */
-  unsigned  pc  = 0x1000;		/* PC for 'assembly' */
+static uint16_t call(U6502 *mpu, uint16_t address, uint16_t source) {
+  (void)source;
 
-  /* Install the two callback functions defined above.
+  switch (address) {
+    case 0:
+      return done(mpu);
+    case WRCH:
+      return wrch(mpu);
+    default:
+      return 0;
+  }
+}
+
+static uint8_t read(U6502 *mpu, uint16_t address) {
+  return ((uint8_t *)mpu->userdata)[address];
+}
+
+static void write(U6502 *mpu, uint16_t address, uint8_t value) {
+  ((uint8_t *)mpu->userdata)[address] = value;
+}
+
+int main(void)
+{
+  uint8_t *memory = calloc(0x10000, 1);
+  if (!memory) {
+    abort();
+  }
+
+  /* Install the callback functions defined above.
    */
-  M6502_setCallback(mpu, call, WRCH, wrch);	/* Calling FFEE -> wrch() */
-  M6502_setCallback(mpu, call,    0, done);	/* Calling 0 -> done() */
+  U6502_Callbacks callbacks = {
+    .call = call,
+    .read = read,
+    .write = write,
+  };
+
+  U6502    *mpu = U6502_new(0, callbacks, &memory[0]);	/* Make a 6502 */
+  unsigned  pc  = 0x1000;		/* PC for 'assembly' */
 
   /* A few macros that dump bytes into the 6502's memory.
    */
-# define gen1(X)	(mpu->memory[pc++]= (uint8_t)(X))
+# define gen1(X)	(memory[pc++]= (uint8_t)(X))
 # define gen2(X,Y)	gen1(X); gen1(Y)
 # define gen3(X,Y,Z)	gen1(X); gen2(Y,Z)
 
@@ -87,7 +118,7 @@ int main()
     uint16_t ip= 0x1000;
     while (ip < pc)
       {
-	ip += M6502_disassemble(mpu, ip, insn);
+	ip += U6502_disassemble(mpu, ip, insn);
 	printf("%04X %s\n", ip, insn);
       }
   }
@@ -95,13 +126,14 @@ int main()
   /* Point the RESET vector at the first instruction in the assembled
    * program.
    */
-  M6502_setVector(mpu, RST, 0x1000);
+  U6502_setVector(mpu, RST, 0x1000);
 
   /* Reset the 6502 and run the program.
    */
-  M6502_reset(mpu);
-  M6502_run(mpu);
-  M6502_delete(mpu);	/* We never reach here, but what the hey. */
+  U6502_reset(mpu);
+  U6502_run(mpu);
+  U6502_delete(mpu);	/* We never reach here, but what the hey. */
+  free(memory);
 
   return 0;
 }

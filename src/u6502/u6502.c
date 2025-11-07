@@ -1,6 +1,7 @@
-/* lib6502.c -- MOS Technology 6502 emulator	-*- C -*- */
+/* u6502.c -- MOS Technology 6502 emulator	-*- C -*- */
 
 /* Copyright (c) 2005 Ian Piumarta
+ * Copyright (c) 2025 Playful KittyKat
  * 
  * All rights reserved.
  *
@@ -30,7 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "lib6502.h"
+#include "u6502.h"
 
 typedef uint8_t  byte;
 typedef uint16_t word;
@@ -67,22 +68,16 @@ enum {
 
 /* memory access (indirect if callback installed) -- ARGUMENTS ARE EVALUATED MORE THAN ONCE! */
 
-#define putMemory(ADDR, BYTE)			\
-  ( writeCallback[ADDR]				\
-      ? writeCallback[ADDR](mpu, ADDR, BYTE)	\
-      : (memory[ADDR]= BYTE) )
+#define putMemory(ADDR, BYTE)	( writeCallback(mpu, ADDR, BYTE) )
 
-#define getMemory(ADDR)				\
-  ( readCallback[ADDR]				\
-      ?  readCallback[ADDR](mpu, ADDR, 0)	\
-      :  memory[ADDR] )
+#define getMemory(ADDR)	( readCallback(mpu, ADDR) )
 
 /* stack access (always direct) */
 
-#define push(BYTE)		(memory[0x0100 + S--]= (BYTE))
-#define pop()			(memory[++S + 0x0100])
+#define push(BYTE)		({ if (S <= 0) return U6502_StatusStack; putMemory(0x0100 + S--, (BYTE)); })
+#define pop()			({ if (S >= 0xFF) return U6502_StatusStack; getMemory(++S + 0x0100); })
 
-/* adressing modes (memory access direct) */
+/* addressing modes (memory access direct) */
 
 #define implied(ticks, cpu)				\
   tick(ticks, cpu);
@@ -93,12 +88,12 @@ enum {
 
 #define abs(ticks, cpu)				\
   tick(ticks, cpu);					\
-  ea= memory[PC] + (memory[PC + 1] << 8);	\
+  ea= getMemory(PC) + (getMemory(PC + 1) << 8);	\
   PC += 2;
 
 #define relative(ticks, cpu)				\
   tick(ticks, cpu);					\
-  ea= memory[PC++];				\
+  ea= getMemory(PC++);				\
   if (ea & 0x80) ea -= 0x100;			\
   tickIf((ea >> 8) != (PC >> 8));
 
@@ -106,51 +101,51 @@ enum {
   tick(ticks, cpu);					\
   {						\
     word tmp;					\
-    tmp= memory[PC]  + (memory[PC  + 1] << 8);	\
-    ea = memory[tmp] + (memory[tmp + 1] << 8);	\
+    tmp= getMemory(PC)  + (getMemory(PC  + 1) << 8);	\
+    ea = getMemory(tmp) + (getMemory(tmp + 1) << 8);	\
     PC += 2;					\
   }
 
 #define absx(ticks, cpu)						\
   tick(ticks, cpu);							\
-  ea= memory[PC] + (memory[PC + 1] << 8);			\
+  ea= getMemory(PC) + (getMemory(PC + 1) << 8);			\
   PC += 2;							\
   tickIf((ticks == 4) && ((ea >> 8) != ((ea + X) >> 8)));	\
   ea += X;
 
 #define absy(ticks, cpu)						\
   tick(ticks, cpu);							\
-  ea= memory[PC] + (memory[PC + 1] << 8);			\
+  ea= getMemory(PC) + (getMemory(PC + 1) << 8);			\
   PC += 2;							\
   tickIf((ticks == 4) && ((ea >> 8) != ((ea + Y) >> 8)));	\
   ea += Y
 
 #define zp(ticks, cpu)				\
   tick(ticks, cpu);					\
-  ea= memory[PC++];
+  ea= getMemory(PC++);
 
 #define zpx(ticks, cpu)				\
   tick(ticks, cpu);					\
-  ea= memory[PC++] + X;				\
+  ea= getMemory(PC++) + X;				\
   ea &= 0x00ff;
 
 #define zpy(ticks, cpu)				\
   tick(ticks, cpu);					\
-  ea= memory[PC++] + Y;				\
+  ea= getMemory(PC++) + Y;				\
   ea &= 0x00ff;
 
 #define indx(ticks, cpu)				\
   tick(ticks, cpu);					\
   {						\
-    byte tmp= memory[PC++] + X;			\
-    ea= memory[tmp] + (memory[tmp + 1] << 8);	\
+    byte tmp= getMemory(PC++) + X;			\
+    ea= getMemory(tmp) + (getMemory(tmp + 1) << 8);	\
   }
 
 #define indy(ticks, cpu)						\
   tick(ticks, cpu);							\
   {								\
-    byte tmp= memory[PC++];					\
-    ea= memory[tmp] + (memory[tmp + 1] << 8);			\
+    byte tmp= getMemory(PC++);					\
+    ea= getMemory(tmp) + (getMemory(tmp + 1) << 8);			\
     tickIf((ticks == 5) && ((ea >> 8) != ((ea + Y) >> 8)));	\
     ea += Y;							\
   }
@@ -159,16 +154,16 @@ enum {
   tick(ticks, cpu);						\
   {							\
     word tmp;						\
-    tmp= memory[PC ] + (memory[PC  + 1] << 8) + X;	\
-    ea = memory[tmp] + (memory[tmp + 1] << 8);		\
+    tmp= getMemory(PC ) + (getMemory(PC  + 1) << 8) + X;	\
+    ea = getMemory(tmp) + (getMemory(tmp + 1) << 8);		\
   }
 
 #define indzp(ticks, cpu)					\
   tick(ticks, cpu);						\
   {							\
     byte tmp;						\
-    tmp= memory[PC++];					\
-    ea = memory[tmp] + (memory[tmp + 1] << 8);		\
+    tmp= getMemory(PC++);					\
+    ea = getMemory(tmp) + (getMemory(tmp + 1) << 8);		\
   }
 
 /* insns */
@@ -498,11 +493,11 @@ enum {
 #define jmp(ticks, cpu, adrmode)				\
   adrmode(ticks, cpu);					\
   PC= ea;						\
-  if (mpu->callbacks->call[ea])				\
+  if (1)				\
     {							\
       word addr;					\
       externalise();					\
-      if ((addr= mpu->callbacks->call[ea](mpu, ea, 0)))	\
+      if ((addr= mpu->callbacks.call(mpu, ea, ea)))	\
 	{						\
 	  internalise();				\
 	  PC= addr;					\
@@ -517,11 +512,11 @@ enum {
   push(PC & 0xff);					\
   PC--;							\
   adrmode(ticks, cpu);					\
-  if (mpu->callbacks->call[ea])				\
+  if (1)				\
     {							\
       word addr;					\
       externalise();					\
-      if ((addr= mpu->callbacks->call[ea](mpu, ea, 0)))	\
+      if ((addr= mpu->callbacks.call(mpu, ea, ea)))	\
 	{						\
 	  internalise();				\
 	  PC= addr;					\
@@ -551,11 +546,11 @@ enum {
   P |= flagI;							\
   {								\
     word hdlr= getMemory(0xfffe) + (getMemory(0xffff) << 8);	\
-    if (mpu->callbacks->call[hdlr])				\
+    if (1)				\
       {								\
 	word addr;						\
 	externalise();						\
-	if ((addr= mpu->callbacks->call[hdlr](mpu, PC - 2, 0)))	\
+	if ((addr= mpu->callbacks.call(mpu, hdlr, PC - 2)))	\
 	  {							\
 	    internalise();					\
 	    hdlr= addr;						\
@@ -582,9 +577,7 @@ enum {
 #define ill(ticks, cpu, adrmode)						\
   fetch();								\
   tick(ticks, cpu);								\
-  fflush(stdout);							\
-  fprintf(stderr, "\nundefined instruction %02X\n", memory[PC-1]);	\
-  return;
+  return U6502_StatusIll;
 
 #define phR(ticks, cpu, adrmode, R)			\
   fetch();					\
@@ -703,36 +696,39 @@ enum {
 
 
 
-void M6502_irq(M6502 *mpu)
+void U6502_irq(U6502 *mpu)
 {
   if (!(mpu->registers->p & flagI))
     {
-      mpu->memory[0x0100 + mpu->registers->s--] = (byte)(mpu->registers->pc >> 8);
-      mpu->memory[0x0100 + mpu->registers->s--] = (byte)(mpu->registers->pc & 0xff);
-      mpu->memory[0x0100 + mpu->registers->s--] = mpu->registers->p;
+      U6502_WriteCallback writeCallback = mpu->callbacks.write;
+      putMemory(0x0100 + mpu->registers->s--, (byte)(mpu->registers->pc >> 8));
+      putMemory(0x0100 + mpu->registers->s--, (byte)(mpu->registers->pc & 0xff));
+      putMemory(0x0100 + mpu->registers->s--, mpu->registers->p);
       mpu->registers->p &= ~flagB;
       mpu->registers->p |=  flagI;
-      mpu->registers->pc = M6502_getVector(mpu, IRQ);
+      mpu->registers->pc = U6502_getVector(mpu, IRQ);
     }
 }
 
 
-void M6502_nmi(M6502 *mpu)
+void U6502_nmi(U6502 *mpu)
 {
-  mpu->memory[0x0100 + mpu->registers->s--] = (byte)(mpu->registers->pc >> 8);
-  mpu->memory[0x0100 + mpu->registers->s--] = (byte)(mpu->registers->pc & 0xff);
-  mpu->memory[0x0100 + mpu->registers->s--] = mpu->registers->p;
+  U6502_WriteCallback writeCallback = mpu->callbacks.write;
+  putMemory(0x0100 + mpu->registers->s--, (byte)(mpu->registers->pc >> 8));
+  putMemory(0x0100 + mpu->registers->s--, (byte)(mpu->registers->pc & 0xff));
+  putMemory(0x0100 + mpu->registers->s--, mpu->registers->p);
   mpu->registers->p &= ~flagB;
   mpu->registers->p |=  flagI;
-  mpu->registers->pc = M6502_getVector(mpu, NMI);
+  mpu->registers->pc = U6502_getVector(mpu, NMI);
 }
 
 
-void M6502_reset(M6502 *mpu)
+void U6502_reset(U6502 *mpu)
 {
   mpu->registers->p &= ~flagD;
   mpu->registers->p |=  flagI;
-  mpu->registers->pc = M6502_getVector(mpu, RST);
+  mpu->registers->pc = U6502_getVector(mpu, RST);
+  mpu->registers->s = 0xFD;
 }
 
 
@@ -743,7 +739,7 @@ static void oops(void)
   fprintf(stderr, "\noops -- instruction dispatch missing\n");
 }
 
-void M6502_run(M6502 *mpu)
+U6502_Status U6502_run(U6502 *mpu)
 {
 #if defined(__GNUC__) && !defined(__STRICT_ANSI__)
 
@@ -767,15 +763,15 @@ void M6502_run(M6502 *mpu)
   register void **itabp= &itab[0];
   register void  *tpc;
 
-# define begin()				fetch();  next()
-# define fetch()				tpc= itabp[memory[PC++]]
+# define begin()				fetch(); next()
+# define fetch()				tpc= itabp[getMemory(PC++)]
 # define next()					goto *tpc
 # define dispatch(num, name, mode, cycles)	_##num: name(cycles, mpu, mode) oops();  next()
 # define end()
 
 #else /* (!__GNUC__) || (__STRICT_ANSI__) */
 
-# define begin()				for (;;) switch (memory[PC++]) {
+# define begin()				for (;;) switch (getMemory(PC++)) {
 # define fetch()
 # define next()					break
 # define dispatch(num, name, mode, cycles)	case 0x##num: name(cycles, mpu, mode);  next()
@@ -783,12 +779,11 @@ void M6502_run(M6502 *mpu)
 
 #endif
 
-  register byte  *memory= mpu->memory;
   register word   PC;
   word		  ea;
   byte		  A, X, Y, P, S;
-  M6502_Callback *readCallback=  mpu->callbacks->read;
-  M6502_Callback *writeCallback= mpu->callbacks->write;
+  U6502_ReadCallback readCallback=  mpu->callbacks.read;
+  U6502_WriteCallback writeCallback= mpu->callbacks.write;
 
 # define internalise()	A= mpu->registers->a;  X= mpu->registers->x;  Y= mpu->registers->y;  P= mpu->registers->p;  S= mpu->registers->s;  PC= mpu->registers->pc
 # define externalise()	mpu->registers->a= A;  mpu->registers->x= X;  mpu->registers->y= Y;  mpu->registers->p= P;  mpu->registers->s= S;  mpu->registers->pc= PC
@@ -808,33 +803,36 @@ void M6502_run(M6502 *mpu)
 # undef end
 
   (void)oops;
+  return U6502_StatusOk;
 }
 
-void   M6502_tick(M6502 *mpu)
+U6502_Status   U6502_tick(U6502 *mpu)
 {
     if ( ! mpu->ticks-- )
     {
 		mpu->ticks = 0;
-		M6502_step(mpu);
+		U6502_Status status = U6502_step(mpu);
+    if (U6502_StatusOk != status) return status;
     }
+
+    return U6502_StatusOk;
 }
 
-void M6502_step(M6502 *mpu)
+U6502_Status U6502_step(U6502 *mpu)
 {
 
-# define begin()				switch (memory[PC++]) {
+# define begin()				switch (getMemory(PC++)) {
 # define fetch()
 # define next()					break
 # define dispatch(num, name, mode, cycles)	case 0x##num: name(cycles, mpu, mode);  next()
 # define end()					}
     
     
-    register byte  *memory= mpu->memory;
     register word   PC;
     word		  ea;
     byte		  A, X, Y, P, S;
-    M6502_Callback *readCallback=  mpu->callbacks->read;
-    M6502_Callback *writeCallback= mpu->callbacks->write;
+    U6502_ReadCallback readCallback=  mpu->callbacks.read;
+    U6502_WriteCallback writeCallback= mpu->callbacks.write;
     
 # define internalise()	A= mpu->registers->a;  X= mpu->registers->x;  Y= mpu->registers->y;  P= mpu->registers->p;  S= mpu->registers->s;  PC= mpu->registers->pc
 # define externalise()	mpu->registers->a= A;  mpu->registers->x= X;  mpu->registers->y= Y;  mpu->registers->p= P;  mpu->registers->s= S;  mpu->registers->pc= PC
@@ -855,29 +853,30 @@ void M6502_step(M6502 *mpu)
 # undef dispatch
 # undef end
 
+    return U6502_StatusOk;
 }
 
-int M6502_disassemble(M6502 *mpu, word ip, char buffer[64])
+int U6502_disassemble(U6502 *mpu, word ip, char buffer[64])
 {
   char *s= buffer;
-  byte *b= mpu->memory + ip;
+  U6502_ReadCallback readCallback=  mpu->callbacks.read;
 
-  switch (b[0])
+  switch (getMemory(ip))
     {
 #    define _implied							    return 1;
-#    define _immediate	sprintf(s, "#%02X",	   b[1]);		    return 2;
-#    define _zp		sprintf(s, "%02X",	   b[1]);		    return 2;
-#    define _zpx	sprintf(s, "%02X,X",	   b[1]);		    return 2;
-#    define _zpy	sprintf(s, "%02X,Y",	   b[1]);		    return 2;
-#    define _abs	sprintf(s, "%02X%02X",	   b[2], b[1]);		    return 3;
-#    define _absx	sprintf(s, "%02X%02X,X",   b[2], b[1]);		    return 3;
-#    define _absy	sprintf(s, "%02X%02X,Y",   b[2], b[1]);		    return 3;
-#    define _relative	sprintf(s, "%04X",	   ip + 2 + (int8_t)b[1]);  return 2;
-#    define _indirect	sprintf(s, "(%02X%02X)",   b[2], b[1]);		    return 3;
-#    define _indzp	sprintf(s, "(%02X)",	   b[1]);		    return 2;
-#    define _indx	sprintf(s, "(%02X,X)",	   b[1]);		    return 2;
-#    define _indy	sprintf(s, "(%02X),Y",	   b[1]);		    return 2;
-#    define _indabsx	sprintf(s, "(%02X%02X,X)", b[2], b[1]);		    return 3;
+#    define _immediate	sprintf(s, "#%02X",	   getMemory(ip + 1));		    return 2;
+#    define _zp		sprintf(s, "%02X",	   getMemory(ip + 1));		    return 2;
+#    define _zpx	sprintf(s, "%02X,X",	   getMemory(ip + 1));		    return 2;
+#    define _zpy	sprintf(s, "%02X,Y",	   getMemory(ip + 1));		    return 2;
+#    define _abs	sprintf(s, "%02X%02X",	   getMemory(ip + 2), getMemory(ip + 1));		    return 3;
+#    define _absx	sprintf(s, "%02X%02X,X",   getMemory(ip + 2), getMemory(ip + 1));		    return 3;
+#    define _absy	sprintf(s, "%02X%02X,Y",   getMemory(ip + 2), getMemory(ip + 1));		    return 3;
+#    define _relative	sprintf(s, "%04X",	   ip + 2 + (int8_t)getMemory(ip + 1));  return 2;
+#    define _indirect	sprintf(s, "(%02X%02X)",   getMemory(ip + 2), getMemory(ip + 1));		    return 3;
+#    define _indzp	sprintf(s, "(%02X)",	   getMemory(ip + 1));		    return 2;
+#    define _indx	sprintf(s, "(%02X,X)",	   getMemory(ip + 1));		    return 2;
+#    define _indy	sprintf(s, "(%02X),Y",	   getMemory(ip + 1));		    return 2;
+#    define _indabsx	sprintf(s, "(%02X%02X,X)", getMemory(ip + 2), getMemory(ip + 1));		    return 3;
 
 #    define disassemble(num, name, mode, cycles) case 0x##num: s += sprintf(s, "%s ", #name); _##mode
       do_insns(disassemble);
@@ -888,9 +887,9 @@ int M6502_disassemble(M6502 *mpu, word ip, char buffer[64])
 }
 
 
-void M6502_dump(M6502 *mpu, char buffer[64])
+void U6502_dump(U6502 *mpu, char buffer[64])
 {
-  M6502_Registers *r= mpu->registers;
+  U6502_Registers *r= mpu->registers;
   uint8_t p= r->p;
 # define P(N,C) (p & (1 << (N)) ? (C) : '-')
   sprintf(buffer, "PC=%04X SP=%04X A=%02X X=%02X Y=%02X P=%02X %c%c%c%c%c%c%c%c",
@@ -901,39 +900,30 @@ void M6502_dump(M6502 *mpu, char buffer[64])
 }
 
 
-static void outOfMemory(void)
+U6502 *U6502_new(U6502_Registers *registers, U6502_Callbacks callbacks, void* userdata)
 {
-  fflush(stdout);
-  fprintf(stderr, "\nout of memory\n");
-  abort();
-}
+  U6502 *mpu= calloc(1, sizeof(U6502));
+  if (!mpu) return 0;
 
+  if (!registers)  { registers = (U6502_Registers *)calloc(1, sizeof(U6502_Registers));  mpu->flags |= U6502_RegistersAllocated; }
 
-M6502 *M6502_new(M6502_Registers *registers, M6502_Memory memory, M6502_Callbacks *callbacks)
-{
-  M6502 *mpu= calloc(1, sizeof(M6502));
-  if (!mpu) outOfMemory();
-
-  if (!registers)  { registers = (M6502_Registers *)calloc(1, sizeof(M6502_Registers));  mpu->flags |= M6502_RegistersAllocated; }
-  if (!memory   )  { memory    = (uint8_t         *)calloc(1, sizeof(M6502_Memory   ));  mpu->flags |= M6502_MemoryAllocated;    }
-  if (!callbacks)  { callbacks = (M6502_Callbacks *)calloc(1, sizeof(M6502_Callbacks));  mpu->flags |= M6502_CallbacksAllocated; }
-
-  if (!registers || !memory || !callbacks) outOfMemory();
+  if (!registers) {
+    free(mpu);
+    return 0;
+  };
 
   mpu->registers = registers;
-  mpu->memory    = memory;
   mpu->callbacks = callbacks;
+  mpu->userdata = userdata;
   mpu->ticks     = 0;
 
   return mpu;
 }
 
 
-void M6502_delete(M6502 *mpu)
+void U6502_delete(U6502 *mpu)
 {
-  if (mpu->flags & M6502_CallbacksAllocated) free(mpu->callbacks);
-  if (mpu->flags & M6502_MemoryAllocated   ) free(mpu->memory);
-  if (mpu->flags & M6502_RegistersAllocated) free(mpu->registers);
+  if (mpu->flags & U6502_RegistersAllocated) free(mpu->registers);
 
   free(mpu);
 }

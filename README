@@ -1,38 +1,39 @@
-		lib6502 - 6502 Microprocessor Emulator
+		u6502 - 6502 Microprocessor Emulator
 
-			Version: 1.0
+			Version: 0.1
 
 
 WHAT IF I'M TOO LAZY TO READ 'README'S?
 
-	make
-	make install
+	mkdir build
+	meson setup build
+	cd build
+	meson compile
+	meson install
 	more examples/README
 
 
-WHAT IS LIB6502?
+WHAT IS U6502?
 
-  lib6502 is a library that emulates the 6502 microprocessor.  It
-  comes with a small 'shell', run6502, that can execute 6502 programs
-  from the command line.
+  u6502 is a library that emulates the 6502 microprocessor.
 
-  lib6502 is distributed under the MIT license: it is non-infectious
+  u6502 is distributed under the MIT license: it is non-infectious
   and will not make your projects contagious to others the instant you
-  choose to use lib6502 in them.  See the file COPYING for details.
+  choose to use u6502 in them.  See the file COPYING for details.
 
 
 WHERE IS THE LATEST SOURCE CODE?
 
-  Source code for lib6502 is available from the author's home page at
-  'http://piumarta.com/software'.  You can download the most recent
-  release or use Subversion to get the very latest sources.
+  Source code for u6502 is at 'https://github.com/playfulkittykat/u6502'.
+  You can download the most recent release or use git to get the very latest
+  sources.
 
 
 WHERE IS THE DOCUMENTATION?
 
-  Manual pages for run6502 and lib6502 (and all the functions it
-  exports) should be available once it is installed.  Each includes a
-  short 'examples' section.  Use the 'man' command to read them.
+  Manual pages for u6502 (and all the functions it exports) should be
+  available once it is installed.  Each includes a short 'examples' section.
+  Use the 'man' command to read them.
 
   Your best place to start looking for documentation on the 6502
   itself is 'http://6502.org'.  A google search of the web will also
@@ -42,52 +43,35 @@ WHERE IS THE DOCUMENTATION?
 
 HOW DO I INSTALL IT?
 
-  It's not really big enough to warrant the whole 'configure' thing.
-  Any system with an ANSI compiler and C library should be able to
-  compile it out of the box.  After unpacking the archive, just type:
+  Install meson, then after unpacking the archive, just type:
 
-	make
+	mkdir build
+	meson setup build
+	cd build
+	meson compile
 
-  to build it.  If the compiler blows up immediately, edit the
-  Makefile and play with the '-g' and '-O' flags and then try again.
   If you really can't make the compiler happy you've found a bug (read
   the next section but one).  Otherwise, if you want it put it
   somewhere more permanent then type:
 
-	make install
+	meson install
 
   (as root) to install it.  It goes into /usr/local by default; if you
-  want it elsewhere then set PREFIX in the make command.  For example:
+  want it elsewhere then set prefix in the setup command.  For example:
 
-	make install PREFIX=/usr
+	meson setup -Dprefix=/usr
 
   will put everything under '/usr'.
-
-  When you get bored with it, go back to the source directory and
-  type:
-
-	make uninstall
-
-  (with the same PREFIX you specified during the install, if
-  necessary.)
 
 
 WHAT CAN I DO WITH IT?
 
   See the file EXAMPLES for some suggestions (all of them polite).
 
-  If that leaves you wanting more, read the source for run6502 -- it
-  exercises just about every feature in lib6502.
-
 
 HOW DO I REPORT PROBLEMS?
 
-  Send e-mail to the author at: firstName (at) lastName (dot) com
-
-  (For suitable values of firstName and lastName, see the last section
-  of this file.)
-
-  If you're still confused, contact him at: http://piumarta.com
+  Send e-mail to the author at: pkk (at) tabby (dot) rocks
 
 
 HOW CAN I HELP?
@@ -105,27 +89,22 @@ HOW CAN I HELP?
   self-contained program that runs once to completion then we can
   probably find some real hardware to test against the test suite.)
 
-  If you know how to write software that emulates peripheral hardware
-  devices, google up some details on the popular 6502-based
-  microcomputers (Acorn, Commodore, etc.) and add some serious system
-  emulation to run6502.  Make it all pluggable (think dynamic
-  libraries over an 'agnostic' core), so we can change machines at the
-  flip of a (command-line) switch.  (The callback mechanism in lib6502
-  was designed with this kind of 'pluggable hardware emulation' in
-  mind.)
-
 
 WHO WROTE THIS STUFF, AND WHY?
 
   lib6502 was written by Ian Piumarta.
+  u6502 was tweaked by Playful KittyKat
 
   While writing ccg (an entirely different project that creates
-  runtime assemblers for dynamic code generators) he decided to
+  runtime assemblers for dynamic code generators) Ian decided to
   include support for an 8-bit microprocessor, just for fun.  He chose
   the 6502 because it was used in the first computer he owned and
   programmed (an Ohio Scientific Superboard II, when he was 14) as
   well as the second (an Acorn 'BBC Model B', about four years later).
-  lib6502 started as a 'glorified switch statement' that ran some
+  u6502 started as a 'glorified switch statement' that ran some
   small test programs spewed into memory by ccg, but rapidly got out
-  of control over the course of a weekend.  You're looking at the
-  result.
+  of control over the course of a weekend.
+
+  Twenty years later, pkk wanted to run some untrusted code on a
+  microcontroller, and tweaked lib6502 to run on low memory devices.
+  You're looking at the result.
