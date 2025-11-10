@@ -2,7 +2,7 @@ project(
     'u6502',
     'c',
     version: '0.1',
-    default_options: ['warning_level=2'],
+    default_options: ['c_std=gnu99', 'warning_level=2'],
     license: 'MIT',
 )
 
