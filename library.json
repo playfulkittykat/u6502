@@ -1,0 +1,39 @@
+{
+	"name": "u6502",
+	"version": "0.1.0",
+	"_comment": "^ also update meson.build",
+	"description": "6502 microprocessor emulaor for memory constrainted devices",
+	"keywords": ["emulation", "6502", "microprocessor", "8bit"],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/playfulkittykat/u6502.git"
+	},
+	"authors": [
+		{
+			"name": "Ian Piumarta",
+			"url": "https://www.piumarta.com/",
+			"maintainer": false
+
+		},
+		{
+			"name": "Shon Frazier",
+			"email": "shon@fyrestead.com",
+			"url": "https://shon.io/",
+			"maintainer": false
+
+		},
+		{
+			"name": "Bruce Hoult",
+			"email": "bruce@hoult.org",
+			"url": "https://hoult.org/bruce/",
+			"maintainer": false
+		},
+		{
+			"name": "Playful KittyKat",
+			"maintainer": true
+		}
+	],
+	"license": "MIT",
+	"frameworks": "*",
+	"platforms": "*"
+}

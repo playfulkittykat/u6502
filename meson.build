@@ -1,7 +1,7 @@
 project(
     'u6502',
     'c',
-    version: '0.1',
+    version: '0.1', # Also update library.json!
     default_options: ['c_std=gnu99', 'warning_level=2'],
     license: 'MIT',
 )
