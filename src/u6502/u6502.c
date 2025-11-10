@@ -30,6 +30,7 @@
  *   - emulator+disassembler in same object file (library is kind of pointless)
  */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -85,13 +86,13 @@ enum
     ({                                                                         \
         if (S <= 0)                                                            \
             return U6502_StatusStack;                                          \
-        putMemory(0x0100 + S--, (BYTE));                                       \
+        putMemory(U6502_STACK_BASE + S--, (BYTE));                             \
     })
 #define pop()                                                                  \
     ({                                                                         \
         if (S >= 0xFF)                                                         \
             return U6502_StatusStack;                                          \
-        getMemory(++S + 0x0100);                                               \
+        getMemory(++S + U6502_STACK_BASE);                                     \
     })
 
 /* addressing modes (memory access direct) */
@@ -127,14 +128,14 @@ enum
     tick(ticks, cpu);                                                          \
     ea = getMemory(PC) + (getMemory(PC + 1) << 8);                             \
     PC += 2;                                                                   \
-    tickIf((ticks == 4) && ((ea >> 8) != ((ea + X) >> 8)));                    \
+    tickIf(((ticks) == 4) && ((ea >> 8) != ((ea + X) >> 8)));                  \
     ea += X;
 
 #define absy(ticks, cpu)                                                       \
     tick(ticks, cpu);                                                          \
     ea = getMemory(PC) + (getMemory(PC + 1) << 8);                             \
     PC += 2;                                                                   \
-    tickIf((ticks == 4) && ((ea >> 8) != ((ea + Y) >> 8)));                    \
+    tickIf(((ticks) == 4) && ((ea >> 8) != ((ea + Y) >> 8)));                  \
     ea += Y
 
 #define zp(ticks, cpu)                                                         \
@@ -163,7 +164,7 @@ enum
     {                                                                          \
         byte tmp = getMemory(PC++);                                            \
         ea = getMemory(tmp) + (getMemory(tmp + 1) << 8);                       \
-        tickIf((ticks == 5) && ((ea >> 8) != ((ea + Y) >> 8)));                \
+        tickIf(((ticks) == 5) && ((ea >> 8) != ((ea + Y) >> 8)));              \
         ea += Y;                                                               \
     }
 
@@ -271,8 +272,8 @@ enum
     fetch();                                                                   \
     {                                                                          \
         byte B = getMemory(ea);                                                \
-        byte d = R - B;                                                        \
-        setNZC(d & 0x80, !d, R >= B);                                          \
+        byte d = (R) - B;                                                      \
+        setNZC(d & 0x80, !d, (R) >= B);                                        \
     }                                                                          \
     next();
 
@@ -294,8 +295,8 @@ enum
 #define decR(ticks, cpu, adrmode, R)                                           \
     fetch();                                                                   \
     tick(ticks, cpu);                                                          \
-    --R;                                                                       \
-    setNZ(R & 0x80, !R);                                                       \
+    --(R);                                                                     \
+    setNZ((R) & 0x80, !(R));                                                   \
     next();
 
 #define dea(ticks, cpu, adrmode) decR(ticks, cpu, adrmode, A)
@@ -316,8 +317,8 @@ enum
 #define incR(ticks, cpu, adrmode, R)                                           \
     fetch();                                                                   \
     tick(ticks, cpu);                                                          \
-    ++R;                                                                       \
-    setNZ(R & 0x80, !R);                                                       \
+    ++(R);                                                                     \
+    setNZ((R) & 0x80, !(R));                                                   \
     next();
 
 #define ina(ticks, cpu, adrmode) incR(ticks, cpu, adrmode, A)
@@ -455,8 +456,8 @@ enum
 #define tRS(ticks, cpu, adrmode, R, S)                                         \
     fetch();                                                                   \
     tick(ticks, cpu);                                                          \
-    S = R;                                                                     \
-    setNZ(S & 0x80, !S);                                                       \
+    (S) = (R);                                                                 \
+    setNZ((S) & 0x80, !(S));                                                   \
     next();
 
 #define tax(ticks, cpu, adrmode) tRS(ticks, cpu, adrmode, A, X)
@@ -474,8 +475,8 @@ enum
 #define ldR(ticks, cpu, adrmode, R)                                            \
     adrmode(ticks, cpu);                                                       \
     fetch();                                                                   \
-    R = getMemory(ea);                                                         \
-    setNZ(R & 0x80, !R);                                                       \
+    (R) = getMemory(ea);                                                       \
+    setNZ((R) & 0x80, !(R));                                                   \
     next();
 
 #define lda(ticks, cpu, adrmode) ldR(ticks, cpu, adrmode, A)
@@ -618,8 +619,8 @@ enum
 #define plR(ticks, cpu, adrmode, R)                                            \
     fetch();                                                                   \
     tick(ticks, cpu);                                                          \
-    R = pop();                                                                 \
-    setNZ(R & 0x80, !R);                                                       \
+    (R) = pop();                                                               \
+    setNZ((R) & 0x80, !(R));                                                   \
     next();
 
 #define pla(ticks, cpu, adrmode) plR(ticks, cpu, adrmode, A)
@@ -635,7 +636,7 @@ enum
 #define clF(ticks, cpu, adrmode, F)                                            \
     fetch();                                                                   \
     tick(ticks, cpu);                                                          \
-    P &= ~F;                                                                   \
+    P &= ~(F);                                                                 \
     next();
 
 #define clc(ticks, cpu, adrmode) clF(ticks, cpu, adrmode, flagC)
@@ -646,13 +647,14 @@ enum
 #define seF(ticks, cpu, adrmode, F)                                            \
     fetch();                                                                   \
     tick(ticks, cpu);                                                          \
-    P |= F;                                                                    \
+    P |= (F);                                                                  \
     next();
 
 #define sec(ticks, cpu, adrmode) seF(ticks, cpu, adrmode, flagC)
 #define sed(ticks, cpu, adrmode) seF(ticks, cpu, adrmode, flagD)
 #define sei(ticks, cpu, adrmode) seF(ticks, cpu, adrmode, flagI)
 
+// NOLINTBEGIN(misc-include-cleaner)
 #define do_insns(_)                                                            \
     _(00, brk, implied, 7);                                                    \
     _(01, ora, indx, 6);                                                       \
@@ -910,17 +912,18 @@ enum
     _(fd, sbc, absx, 4);                                                       \
     _(fe, inc, absx, 7);                                                       \
     _(ff, ill, implied, 2);
+// NOLINTEND(misc-include-cleaner)
 
 void
 U6502_irq(U6502* mpu)
 {
     if (!(mpu->registers->p & flagI)) {
         U6502_WriteCallback writeCallback = mpu->callbacks.write;
-        putMemory(0x0100 + mpu->registers->s--,
+        putMemory(U6502_STACK_BASE + mpu->registers->s--,
                   (byte)(mpu->registers->pc >> 8));
-        putMemory(0x0100 + mpu->registers->s--,
+        putMemory(U6502_STACK_BASE + mpu->registers->s--,
                   (byte)(mpu->registers->pc & 0xff));
-        putMemory(0x0100 + mpu->registers->s--, mpu->registers->p);
+        putMemory(U6502_STACK_BASE + mpu->registers->s--, mpu->registers->p);
         mpu->registers->p &= ~flagB;
         mpu->registers->p |= flagI;
         mpu->registers->pc = U6502_getVector(mpu, IRQ);
@@ -931,9 +934,11 @@ void
 U6502_nmi(U6502* mpu)
 {
     U6502_WriteCallback writeCallback = mpu->callbacks.write;
-    putMemory(0x0100 + mpu->registers->s--, (byte)(mpu->registers->pc >> 8));
-    putMemory(0x0100 + mpu->registers->s--, (byte)(mpu->registers->pc & 0xff));
-    putMemory(0x0100 + mpu->registers->s--, mpu->registers->p);
+    putMemory(U6502_STACK_BASE + mpu->registers->s--,
+              (byte)(mpu->registers->pc >> 8));
+    putMemory(U6502_STACK_BASE + mpu->registers->s--,
+              (byte)(mpu->registers->pc & 0xff));
+    putMemory(U6502_STACK_BASE + mpu->registers->s--, mpu->registers->p);
     mpu->registers->p &= ~flagB;
     mpu->registers->p |= flagI;
     mpu->registers->pc = U6502_getVector(mpu, NMI);
@@ -945,7 +950,7 @@ U6502_reset(U6502* mpu)
     mpu->registers->p &= ~flagD;
     mpu->registers->p |= flagI;
     mpu->registers->pc = U6502_getVector(mpu, RST);
-    mpu->registers->s = 0xFD;
+    mpu->registers->s = 0xFD; // NOLINT(readability-magic-numbers)
 }
 
 /* the compiler should elminate all call to this function */
@@ -961,7 +966,7 @@ U6502_run(U6502* mpu)
 {
 #if defined(__GNUC__) && !defined(__STRICT_ANSI__)
 
-    static void* itab[256] = {
+    static void* itab[UINT8_MAX + 1] = {
         &&_00, &&_01, &&_02, &&_03, &&_04, &&_05, &&_06, &&_07, &&_08, &&_09,
         &&_0a, &&_0b, &&_0c, &&_0d, &&_0e, &&_0f, &&_10, &&_11, &&_12, &&_13,
         &&_14, &&_15, &&_16, &&_17, &&_18, &&_19, &&_1a, &&_1b, &&_1c, &&_1d,
@@ -997,7 +1002,7 @@ U6502_run(U6502* mpu)
     fetch();                                                                   \
     next()
 #define fetch() tpc = itabp[getMemory(PC++)]
-#define next() goto* tpc
+#define next() goto* tpc // NOLINT(bugprone-macro-parentheses)
 #define dispatch(num, name, mode, cycles)                                      \
     _##num : name(cycles, mpu, mode) oops();                                   \
     next()
@@ -1063,8 +1068,9 @@ U6502_tick(U6502* mpu)
     if (!mpu->ticks--) {
         mpu->ticks = 0;
         U6502_Status status = U6502_step(mpu);
-        if (U6502_StatusOk != status)
+        if (U6502_StatusOk != status) {
             return status;
+        }
     }
 
     return U6502_StatusOk;
@@ -1081,7 +1087,10 @@ U6502_step(U6502* mpu)
     case 0x##num:                                                              \
         name(cycles, mpu, mode);                                               \
         next()
-#define end() }
+#define end()                                                                  \
+    default:                                                                   \
+        abort();                                                               \
+        }
 
     register word PC;
     word ea;
@@ -1124,7 +1133,7 @@ U6502_step(U6502* mpu)
 }
 
 int
-U6502_disassemble(U6502* mpu, word ip, char buffer[64])
+U6502_disassemble(U6502* mpu, word ip, char buffer[U6502_BUFFER_SIZE])
 {
     char* s = buffer;
     U6502_ReadCallback readCallback = mpu->callbacks.read;
@@ -1177,13 +1186,16 @@ U6502_disassemble(U6502* mpu, word ip, char buffer[64])
         _##mode
         do_insns(disassemble);
 #undef _do
+
+        default:
+            abort();
     }
 
     return 0;
 }
 
 void
-U6502_dump(U6502* mpu, char buffer[64])
+U6502_dump(U6502* mpu, char buffer[U6502_BUFFER_SIZE])
 {
     U6502_Registers* r = mpu->registers;
     uint8_t p = r->p;
@@ -1191,7 +1203,7 @@ U6502_dump(U6502* mpu, char buffer[64])
     sprintf(buffer,
             "PC=%04X SP=%04X A=%02X X=%02X Y=%02X P=%02X %c%c%c%c%c%c%c%c",
             r->pc,
-            0x0100 + r->s,
+            U6502_STACK_BASE + r->s,
             r->a,
             r->x,
             r->y,
@@ -1211,8 +1223,9 @@ U6502*
 U6502_new(U6502_Registers* registers, U6502_Callbacks callbacks, void* userdata)
 {
     U6502* mpu = calloc(1, sizeof(U6502));
-    if (!mpu)
+    if (!mpu) {
         return 0;
+    }
 
     if (!registers) {
         registers = (U6502_Registers*)calloc(1, sizeof(U6502_Registers));
@@ -1235,8 +1248,9 @@ U6502_new(U6502_Registers* registers, U6502_Callbacks callbacks, void* userdata)
 void
 U6502_delete(U6502* mpu)
 {
-    if (mpu->flags & U6502_RegistersAllocated)
+    if (mpu->flags & U6502_RegistersAllocated) {
         free(mpu->registers);
+    }
 
     free(mpu);
 }

@@ -1,5 +1,5 @@
-#ifndef __u6502_h
-#define __u6502_h
+#ifndef u6502_h__
+#define u6502_h__
 
 #include <stdint.h>
 
@@ -8,9 +8,12 @@ extern "C"
 {
 #endif
 
-    typedef struct _U6502 U6502;
-    typedef struct _U6502_Registers U6502_Registers;
-    typedef struct _U6502_Callbacks U6502_Callbacks;
+#define U6502_STACK_BASE (0x0100)
+#define U6502_BUFFER_SIZE (64)
+
+    typedef struct U6502_ U6502;
+    typedef struct U6502_Registers_ U6502_Registers;
+    typedef struct U6502_Callbacks_ U6502_Callbacks;
 
     typedef uint8_t (*U6502_ReadCallback)(U6502* mpu, uint16_t address);
     typedef void (*U6502_WriteCallback)(U6502* mpu,
@@ -33,16 +36,16 @@ extern "C"
         U6502_IRQVectorMSB = 0xffff
     };
 
-    enum _U6502_Status
+    enum U6502_Status_
     {
         U6502_StatusOk = 0,
         U6502_StatusStack,
         U6502_StatusIll,
     };
 
-    typedef enum _U6502_Status U6502_Status;
+    typedef enum U6502_Status_ U6502_Status;
 
-    struct _U6502_Registers
+    struct U6502_Registers_
     {
         uint8_t a;   /* accumulator */
         uint8_t x;   /* X index register */
@@ -52,14 +55,14 @@ extern "C"
         uint16_t pc; /* program counter */
     };
 
-    struct _U6502_Callbacks
+    struct U6502_Callbacks_
     {
         U6502_ReadCallback read;
         U6502_WriteCallback write;
         U6502_CallCallback call;
     };
 
-    struct _U6502
+    struct U6502_
     {
         U6502_Registers* registers;
         U6502_Callbacks callbacks;
@@ -82,8 +85,10 @@ extern "C"
     extern U6502_Status U6502_run(U6502* mpu);
     extern U6502_Status U6502_tick(U6502* mpu);
     extern U6502_Status U6502_step(U6502* mpu);
-    extern int U6502_disassemble(U6502* mpu, uint16_t addr, char buffer[64]);
-    extern void U6502_dump(U6502* mpu, char buffer[64]);
+    extern int U6502_disassemble(U6502* mpu,
+                                 uint16_t ip,
+                                 char buffer[U6502_BUFFER_SIZE]);
+    extern void U6502_dump(U6502* mpu, char buffer[U6502_BUFFER_SIZE]);
     extern void U6502_delete(U6502* mpu);
 
 #define U6502_getVector(MPU, VEC)                                              \
@@ -103,4 +108,4 @@ extern "C"
 }
 #endif
 
-#endif //__u6502_h
+#endif // u6502_h__

@@ -31,5 +31,9 @@ jobs:
         run: |
           meson format -r -i -e
           ninja -C builddir/ clang-format-check
+      - name: Lint
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          ninja -C builddir/ clang-tidy
       - name: Build
         run: meson compile -C builddir/ -v

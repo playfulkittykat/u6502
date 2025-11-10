@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,8 +25,8 @@ wrch(U6502* mpu)
     /* We arrived here from a JSR instruction.  The stack contains the
      * saved PC.  Pop it off the stack.
      */
-    pc = memory[++mpu->registers->s + 0x100];
-    pc |= memory[++mpu->registers->s + 0x100] << 8;
+    pc = memory[++mpu->registers->s + U6502_STACK_BASE];
+    pc |= memory[++mpu->registers->s + U6502_STACK_BASE] << sizeof(uint8_t);
 
     /* The JSR instruction pushes the value of PC before it has been
      * incremented to point to the instruction after the JSR.  Return PC
@@ -43,7 +44,7 @@ wrch(U6502* mpu)
 static uint16_t
 done(U6502* mpu)
 {
-    char buffer[64];
+    char buffer[U6502_BUFFER_SIZE];
 
     /* Dump the internal state of the processor.
      */
@@ -85,7 +86,8 @@ write(U6502* mpu, uint16_t address, uint8_t value)
 int
 main(void)
 {
-    uint8_t* memory = calloc(0x10000, 1);
+    const size_t memory_size = 0x10000;
+    uint8_t* memory = calloc(memory_size, 1);
     if (!memory) {
         abort();
     }
@@ -99,7 +101,8 @@ main(void)
     };
 
     U6502* mpu = U6502_new(0, callbacks, &memory[0]); /* Make a 6502 */
-    unsigned pc = 0x1000;                             /* PC for 'assembly' */
+    const uint16_t entry_point = 0x1000;
+    unsigned pc = entry_point; /* PC for 'assembly' */
 
     /* A few macros that dump bytes into the 6502's memory.
      */
@@ -126,8 +129,8 @@ main(void)
     /* Just for fun: disssemble the program.
      */
     {
-        char insn[64];
-        uint16_t ip = 0x1000;
+        char insn[U6502_BUFFER_SIZE];
+        uint16_t ip = entry_point;
         while (ip < pc) {
             ip += U6502_disassemble(mpu, ip, insn);
             printf("%04X %s\n", ip, insn);
@@ -137,7 +140,7 @@ main(void)
     /* Point the RESET vector at the first instruction in the assembled
      * program.
      */
-    U6502_setVector(mpu, RST, 0x1000);
+    U6502_setVector(mpu, RST, entry_point);
 
     /* Reset the 6502 and run the program.
      */
